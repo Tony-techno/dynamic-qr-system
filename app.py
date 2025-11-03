@@ -1,7 +1,8 @@
-# app.py - FINAL WORKING VERSION for Streamlit 1.28.0
+# app.py - SIMPLE WORKING VERSION
 import streamlit as st
 import qrcode
 import io
+import base64
 
 # Initialize session state
 if 'qr_content' not in st.session_state:
@@ -10,8 +11,8 @@ if 'qr_content' not in st.session_state:
         'message': 'This content can be updated anytime without changing the QR code. Check back for updates!'
     }
 
-def generate_qr(url):
-    """Generate QR code with high error correction"""
+def generate_qr_base64(url):
+    """Generate QR code and return as base64 string"""
     qr = qrcode.QRCode(
         version=5,
         error_correction=qrcode.constants.ERROR_CORRECT_H,
@@ -20,7 +21,18 @@ def generate_qr(url):
     )
     qr.add_data(url)
     qr.make(fit=True)
-    return qr.make_image(fill_color="black", back_color="white")
+    
+    # Create QR code image
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to bytes
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    buf.seek(0)
+    
+    # Convert to base64 for display
+    img_str = base64.b64encode(buf.read()).decode()
+    return img_str
 
 def main():
     st.set_page_config(
@@ -29,33 +41,18 @@ def main():
         layout="wide"
     )
     
-    # Get URL parameters the old way (compatible with Streamlit 1.28.0)
+    # Simple routing based on URL parameter in query string
     try:
-        # For Streamlit 1.28.0, we need to check the URL manually
-        from urllib.parse import parse_qs, urlparse
-        import requests
-        
-        # Get current URL from the request
-        ctx = st.runtime.scriptrunner.get_script_run_ctx()
-        if ctx and hasattr(ctx, 'request'):
-            current_url = ctx.request.url
-        else:
-            current_url = ""
-        
-        # Parse query parameters
-        parsed_url = urlparse(current_url)
-        query_params = parse_qs(parsed_url.query)
-        
-        # Check if we should show mobile view
-        if 'view' in query_params and query_params['view'][0] == 'content':
+        # Check if we're in mobile view by looking at URL
+        import os
+        current_url = os.environ.get('STREAMLIT_SERVER_BASE_URL_PATH', '')
+        if 'view=content' in current_url:
             show_mobile_view()
             return
-            
     except:
-        # If we can't get URL params, just show admin view
         pass
     
-    # Show admin view by default
+    # Default to admin view
     show_admin_view()
 
 def show_admin_view():
@@ -75,19 +72,19 @@ def show_admin_view():
         
         # Generate QR code for mobile view
         qr_url = app_url + "?view=content"
-        qr_img = generate_qr(qr_url)
+        qr_base64 = generate_qr_base64(qr_url)
         
-        # Display QR code
-        st.image(qr_img, caption="Scan this QR code - content updates dynamically!", width=300)
+        # Display QR code using HTML to avoid PIL issues
+        st.markdown(f'<img src="data:image/png;base64,{qr_base64}" width="300" alt="QR Code">', 
+                   unsafe_allow_html=True)
+        st.caption("Scan this QR code - content updates dynamically!")
         
         # Download button
-        buf = io.BytesIO()
-        qr_img.save(buf, format="PNG")
         st.download_button(
             "📥 Download QR Code",
-            buf.getvalue(),
-            "dynamic_qr_code.png",
-            "image/png"
+            data=base64.b64decode(qr_base64),
+            file_name="dynamic_qr_code.png",
+            mime="image/png"
         )
         
         st.success("✅ **QR Code Generated!** Print this once and update content anytime.")
@@ -104,7 +101,7 @@ def show_admin_view():
                 if title and message:
                     st.session_state.qr_content = {'title': title, 'message': message}
                     st.success("✅ Content updated successfully!")
-                    st.balloons()
+                    st.rerun()
                 else:
                     st.error("Please fill in both title and message")
         
@@ -119,7 +116,8 @@ def show_admin_view():
         st.markdown("---")
         st.subheader("Test Mobile View")
         mobile_url = "https://dynamic-qr-system-akma5nenm2jg5fj3tyhfu9.streamlit.app/?view=content"
-        st.markdown(f"[👀 Open Mobile View]({mobile_url})")
+        st.markdown(f'<a href="{mobile_url}" target="_blank">👀 Open Mobile View</a>', 
+                   unsafe_allow_html=True)
 
 def show_mobile_view():
     """What mobile users see when scanning QR code"""
