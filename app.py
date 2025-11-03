@@ -1,4 +1,4 @@
-# app.py - Fixed for Streamlit 1.28.0
+# app.py - FINAL WORKING VERSION for Streamlit 1.28.0
 import streamlit as st
 import qrcode
 import io
@@ -22,14 +22,44 @@ def generate_qr(url):
     qr.make(fit=True)
     return qr.make_image(fill_color="black", back_color="white")
 
-def main_admin():
-    """Admin interface for QR generation and content management"""
+def main():
     st.set_page_config(
         page_title="Dynamic QR System", 
         page_icon="📱", 
         layout="wide"
     )
     
+    # Get URL parameters the old way (compatible with Streamlit 1.28.0)
+    try:
+        # For Streamlit 1.28.0, we need to check the URL manually
+        from urllib.parse import parse_qs, urlparse
+        import requests
+        
+        # Get current URL from the request
+        ctx = st.runtime.scriptrunner.get_script_run_ctx()
+        if ctx and hasattr(ctx, 'request'):
+            current_url = ctx.request.url
+        else:
+            current_url = ""
+        
+        # Parse query parameters
+        parsed_url = urlparse(current_url)
+        query_params = parse_qs(parsed_url.query)
+        
+        # Check if we should show mobile view
+        if 'view' in query_params and query_params['view'][0] == 'content':
+            show_mobile_view()
+            return
+            
+    except:
+        # If we can't get URL params, just show admin view
+        pass
+    
+    # Show admin view by default
+    show_admin_view()
+
+def show_admin_view():
+    """Admin interface for QR generation and content management"""
     st.title("🎯 Dynamic QR Code System")
     st.markdown("---")
     
@@ -85,20 +115,14 @@ def main_admin():
             st.markdown("---")
             st.caption("This is what mobile users will see")
             
-        # Preview button
-        if st.button("👀 Preview Mobile View"):
-            st.experimental_set_query_params(view="content")
-            st.experimental_rerun()
+        # Direct link to mobile view
+        st.markdown("---")
+        st.subheader("Test Mobile View")
+        mobile_url = "https://dynamic-qr-system-akma5nenm2jg5fj3tyhfu9.streamlit.app/?view=content"
+        st.markdown(f"[👀 Open Mobile View]({mobile_url})")
 
-def mobile_view():
+def show_mobile_view():
     """What mobile users see when scanning QR code"""
-    st.set_page_config(
-        page_title="QR Content", 
-        page_icon="📱", 
-        layout="centered",
-        initial_sidebar_state="collapsed"
-    )
-    
     # Hide sidebar for clean mobile view
     st.markdown("""
         <style>
@@ -147,31 +171,6 @@ def mobile_view():
     </div>
     """, unsafe_allow_html=True)
 
-# Check URL parameters for routing (using Streamlit 1.28.0 compatible method)
-query_params = st.experimental_get_query_params()
-
-if "view" in query_params and query_params["view"][0] == "content":
-    mobile_view()
-else:
-    main_admin()
-
-# Add instructions in sidebar for admin view only
-if not ("view" in query_params and query_params["view"][0] == "content"):
-    with st.sidebar:
-        st.header("📋 Instructions")
-        st.markdown("""
-        1. **Download QR Code** above
-        2. **Print & display** the QR code
-        3. **Update content** anytime using the form
-        4. **Scan with mobile** - content updates instantly!
-        
-        **No need to regenerate QR code when content changes!**
-        """)
-        
-        # Current content display
-        st.markdown("---")
-        st.subheader("Current Content")
-        st.text_area("Currently showing:", 
-                    value=f"{st.session_state.qr_content['title']}\n\n{st.session_state.qr_content['message']}", 
-                    height=150,
-                    disabled=True)
+# Run the app
+if __name__ == "__main__":
+    main()
